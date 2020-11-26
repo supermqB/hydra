@@ -17,7 +17,7 @@ fi
 if [[ $PROMETHEUS == true ]]; then
     DC+=" -f quickstart-prometheus.yml"
 fi
-DC+=" up --build -d"
+DC+=" up --build"
 
-$DC
+echo $DC
 
