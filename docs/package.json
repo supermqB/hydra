@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "prettier": "ory-prettier-styles",
-  "consts": {
+  "config": {
     "prettierTarget": "{docs/**,docs,scripts,static,contrib}/*.{md,mdx,json,js,css,html}|*.{js,md}"
   },
   "scripts": {
@@ -15,18 +15,17 @@
     "swizzle": "docusaurus swizzle",
     "serve": "docusaurus serve",
     "deploy": "docusaurus deploy",
-    "format": "prettier --write ${npm_package_consts_prettierTarget}",
-    "format:check": "prettier --check ${npm_package_consts_prettierTarget}",
-    "postinstall": "patch-package"
+    "format": "prettier --write ${npm_package_config_prettierTarget}",
+    "format:check": "prettier --check ${npm_package_config_prettierTarget}"
   },
   "dependencies": {
-    "@docusaurus/core": "2.0.0-alpha.65",
-    "@docusaurus/plugin-content-docs": "2.0.0-alpha.65",
-    "@docusaurus/plugin-content-pages": "2.0.0-alpha.65",
-    "@docusaurus/plugin-google-analytics": "2.0.0-alpha.65",
-    "@docusaurus/plugin-sitemap": "2.0.0-alpha.65",
-    "@docusaurus/theme-classic": "2.0.0-alpha.65",
-    "@docusaurus/theme-search-algolia": "2.0.0-alpha.65",
+    "@docusaurus/core": "2.0.0-alpha.69",
+    "@docusaurus/plugin-content-docs": "2.0.0-alpha.69",
+    "@docusaurus/plugin-content-pages": "2.0.0-alpha.69",
+    "@docusaurus/plugin-google-analytics": "2.0.0-alpha.69",
+    "@docusaurus/plugin-sitemap": "2.0.0-alpha.69",
+    "@docusaurus/theme-classic": "2.0.0-alpha.69",
+    "@docusaurus/theme-search-algolia": "2.0.0-alpha.69",
     "classnames": "2.2.6",
     "file-loader": "^6.1.0",
     "mermaid": "8.6.4",
@@ -50,8 +49,7 @@
   "devDependencies": {
     "json-schema-faker": "0.5.0-rcv.25",
     "json-schema-ref-parser": "8.0.0",
-    "ory-prettier-styles": "^1.0.1",
-    "patch-package": "^6.2.2",
+    "ory-prettier-styles": "^1.1.1",
     "prettier": "2.0.2",
     "ramda": "0.27.0",
     "raw-loader": "^4.0.1",

@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ory/x/sqlxx"
+
+	"github.com/ory/x/errorsx"
+
 	"github.com/gobuffalo/pop/v5"
 	"github.com/pkg/errors"
 
@@ -37,7 +41,7 @@ func (p *Persister) revokeConsentSession(whereStmt string, whereArgs ...interfac
 				fmt.Sprintf("r.challenge = %s.challenge", consent.HandledConsentRequest{}.TableName())).
 			All(&hrs); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return errors.WithStack(x.ErrNotFound)
+				return errorsx.WithStack(x.ErrNotFound)
 			}
 
 			return sqlcon.HandleError(err)
@@ -61,7 +65,7 @@ func (p *Persister) revokeConsentSession(whereStmt string, whereArgs ...interfac
 			localCount, err := c.RawQuery("DELETE FROM hydra_oauth2_consent_request WHERE challenge = ?", hr.ID).ExecWithCount()
 			if err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
-					return errors.WithStack(x.ErrNotFound)
+					return errorsx.WithStack(x.ErrNotFound)
 				}
 				return sqlcon.HandleError(err)
 			}
@@ -72,7 +76,7 @@ func (p *Persister) revokeConsentSession(whereStmt string, whereArgs ...interfac
 		}
 
 		if count == 0 {
-			return errors.WithStack(x.ErrNotFound)
+			return errorsx.WithStack(x.ErrNotFound)
 		}
 
 		return nil
@@ -81,7 +85,7 @@ func (p *Persister) revokeConsentSession(whereStmt string, whereArgs ...interfac
 
 func (p *Persister) RevokeSubjectLoginSession(ctx context.Context, subject string) error {
 	if err := p.Connection(ctx).RawQuery("DELETE FROM hydra_oauth2_authentication_session WHERE subject = ?", subject).Exec(); errors.Is(err, sql.ErrNoRows) {
-		return errors.WithStack(x.ErrNotFound)
+		return errorsx.WithStack(x.ErrNotFound)
 	} else if err != nil {
 		return sqlcon.HandleError(err)
 	}
@@ -90,7 +94,7 @@ func (p *Persister) RevokeSubjectLoginSession(ctx context.Context, subject strin
 	//
 	// count, _ := rows.RowsAffected()
 	// if count == 0 {
-	// 	 return errors.WithStack(x.ErrNotFound)
+	// 	 return errorsx.WithStack(x.ErrNotFound)
 	// }
 
 	return nil
@@ -123,7 +127,7 @@ func (p *Persister) GetForcedObfuscatedLoginSession(ctx context.Context, client,
 		client,
 		obfuscated,
 	).First(&s); errors.Is(err, sql.ErrNoRows) {
-		return nil, errors.WithStack(x.ErrNotFound)
+		return nil, errorsx.WithStack(x.ErrNotFound)
 	} else if err != nil {
 		return nil, sqlcon.HandleError(err)
 	}
@@ -132,7 +136,7 @@ func (p *Persister) GetForcedObfuscatedLoginSession(ctx context.Context, client,
 }
 
 func (p *Persister) CreateConsentRequest(ctx context.Context, req *consent.ConsentRequest) error {
-	return errors.WithStack(p.Connection(ctx).Create(req))
+	return errorsx.WithStack(p.Connection(ctx).Create(req))
 }
 
 func (p *Persister) GetConsentRequest(ctx context.Context, challenge string) (*consent.ConsentRequest, error) {
@@ -140,7 +144,7 @@ func (p *Persister) GetConsentRequest(ctx context.Context, challenge string) (*c
 
 	if err := r.FindInDB(p.Connection(ctx), challenge); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.WithStack(x.ErrNotFound)
+			return nil, errorsx.WithStack(x.ErrNotFound)
 		}
 		return nil, sqlcon.HandleError(err)
 	}
@@ -149,7 +153,7 @@ func (p *Persister) GetConsentRequest(ctx context.Context, challenge string) (*c
 }
 
 func (p *Persister) CreateLoginRequest(ctx context.Context, req *consent.LoginRequest) error {
-	return errors.WithStack(p.Connection(ctx).Create(req))
+	return errorsx.WithStack(p.Connection(ctx).Create(req))
 }
 
 func (p *Persister) GetLoginRequest(ctx context.Context, challenge string) (*consent.LoginRequest, error) {
@@ -157,7 +161,7 @@ func (p *Persister) GetLoginRequest(ctx context.Context, challenge string) (*con
 	return &lr, p.transaction(ctx, func(ctx context.Context, c *pop.Connection) error {
 		if err := (&lr).FindInDB(c, challenge); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return errors.WithStack(x.ErrNotFound)
+				return errorsx.WithStack(x.ErrNotFound)
 			}
 			return sqlcon.HandleError(err)
 		}
@@ -176,7 +180,7 @@ func (p *Persister) HandleConsentRequest(ctx context.Context, challenge string, 
 		}
 
 		if hr.WasUsed {
-			return nil, errors.WithStack(x.ErrConflict.WithHint("The consent request was already used and can no longer be changed."))
+			return nil, errorsx.WithStack(x.ErrConflict.WithHint("The consent request was already used and can no longer be changed."))
 		}
 
 		if err := c.Update(r); err != nil {
@@ -202,7 +206,7 @@ func (p *Persister) VerifyAndInvalidateConsentRequest(ctx context.Context, verif
 		}
 
 		if r.WasUsed {
-			return errors.WithStack(fosite.ErrInvalidRequest.WithDebug("Consent verifier has been used already."))
+			return errorsx.WithStack(fosite.ErrInvalidRequest.WithDebug("Consent verifier has been used already."))
 		}
 
 		r.WasUsed = true
@@ -235,7 +239,7 @@ func (p *Persister) VerifyAndInvalidateLoginRequest(ctx context.Context, verifie
 		}
 
 		if d.WasUsed {
-			return errors.WithStack(fosite.ErrInvalidRequest.WithDebug("Login verifier has been used already."))
+			return errorsx.WithStack(fosite.ErrInvalidRequest.WithDebug("Login verifier has been used already."))
 		}
 
 		d.WasUsed = true
@@ -247,7 +251,7 @@ func (p *Persister) GetRememberedLoginSession(ctx context.Context, id string) (*
 	var s consent.LoginSession
 
 	if err := p.Connection(ctx).Where("remember = TRUE").Find(&s, id); errors.Is(err, sql.ErrNoRows) {
-		return nil, errors.WithStack(x.ErrNotFound)
+		return nil, errorsx.WithStack(x.ErrNotFound)
 	} else if err != nil {
 		return nil, sqlcon.HandleError(err)
 	}
@@ -255,11 +259,11 @@ func (p *Persister) GetRememberedLoginSession(ctx context.Context, id string) (*
 	return &s, nil
 }
 
-func (p *Persister) ConfirmLoginSession(ctx context.Context, id string, subject string, remember bool) error {
+func (p *Persister) ConfirmLoginSession(ctx context.Context, id string, authenticatedAt time.Time, subject string, remember bool) error {
 	return sqlcon.HandleError(
 		p.Connection(ctx).Update(&consent.LoginSession{
 			ID:              id,
-			AuthenticatedAt: time.Now().UTC(),
+			AuthenticatedAt: sqlxx.NullTime(authenticatedAt),
 			Subject:         subject,
 			Remember:        remember,
 		}))
@@ -289,7 +293,7 @@ func (p *Persister) FindGrantedAndRememberedConsentRequests(ctx context.Context,
 			Limit(1).
 			First(&cr); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return errors.WithStack(consent.ErrNoPreviousConsentFound)
+				return errorsx.WithStack(consent.ErrNoPreviousConsentFound)
 			}
 			return sqlcon.HandleError(err)
 		}
@@ -312,7 +316,7 @@ func (p *Persister) FindSubjectsGrantedConsentRequests(ctx context.Context, subj
 		Paginate(offset/limit+1, limit).
 		All(&rs); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.WithStack(consent.ErrNoPreviousConsentFound)
+			return nil, errorsx.WithStack(consent.ErrNoPreviousConsentFound)
 		}
 		return nil, sqlcon.HandleError(err)
 	}
@@ -336,7 +340,7 @@ func (p *Persister) resolveHandledConsentRequests(ctx context.Context, requests 
 	for _, v := range requests {
 		_, err := p.GetConsentRequest(ctx, v.ID)
 		if errors.Is(err, sqlcon.ErrNoRows) || errors.Is(err, x.ErrNotFound) {
-			return nil, errors.WithStack(consent.ErrNoPreviousConsentFound)
+			return nil, errorsx.WithStack(consent.ErrNoPreviousConsentFound)
 		} else if err != nil {
 			return nil, err
 		}
@@ -353,7 +357,7 @@ func (p *Persister) resolveHandledConsentRequests(ctx context.Context, requests 
 	}
 
 	if len(result) == 0 {
-		return nil, errors.WithStack(consent.ErrNoPreviousConsentFound)
+		return nil, errorsx.WithStack(consent.ErrNoPreviousConsentFound)
 	}
 
 	return result, nil
@@ -387,7 +391,7 @@ func (p *Persister) listUserAuthenticatedClients(ctx context.Context, subject, s
 }
 
 func (p *Persister) CreateLogoutRequest(ctx context.Context, request *consent.LogoutRequest) error {
-	return errors.WithStack(p.Connection(ctx).Create(request))
+	return errorsx.WithStack(p.Connection(ctx).Create(request))
 }
 
 func (p *Persister) AcceptLogoutRequest(ctx context.Context, challenge string) (*consent.LogoutRequest, error) {
@@ -399,7 +403,7 @@ func (p *Persister) AcceptLogoutRequest(ctx context.Context, challenge string) (
 }
 
 func (p *Persister) RejectLogoutRequest(ctx context.Context, challenge string) error {
-	return errors.WithStack(
+	return errorsx.WithStack(
 		p.Connection(ctx).
 			RawQuery("UPDATE hydra_oauth2_logout_request SET rejected=true, accepted=false WHERE challenge=?", challenge).
 			Exec())
@@ -415,7 +419,7 @@ func (p *Persister) VerifyAndInvalidateLogoutRequest(ctx context.Context, verifi
 	return &lr, p.transaction(ctx, func(ctx context.Context, c *pop.Connection) error {
 		if err := c.Where("verifier=? AND was_used=FALSE AND accepted=TRUE AND rejected=FALSE", verifier).Select("challenge").First(&lr); err != nil {
 			if err == sql.ErrNoRows {
-				return errors.WithStack(x.ErrNotFound)
+				return errorsx.WithStack(x.ErrNotFound)
 			}
 
 			return sqlcon.HandleError(err)

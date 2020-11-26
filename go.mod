@@ -3,6 +3,7 @@ module github.com/ory/hydra
 go 1.15
 
 require (
+	github.com/cenkalti/backoff/v3 v3.0.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-bindata/go-bindata v3.1.1+incompatible
 	github.com/go-openapi/errors v0.19.3
@@ -11,6 +12,7 @@ require (
 	github.com/go-openapi/swag v0.19.7
 	github.com/go-openapi/validate v0.19.6
 	github.com/go-swagger/go-swagger v0.22.1-0.20200306221957-4aad3a5f78b8
+	github.com/gobuffalo/httptest v1.0.2
 	github.com/gobuffalo/packr v1.24.0 // indirect
 	github.com/gobuffalo/packr/v2 v2.8.0
 	github.com/gobuffalo/pop/v5 v5.3.1
@@ -32,12 +34,12 @@ require (
 	github.com/olekukonko/tablewriter v0.0.1
 	github.com/ory/analytics-go/v4 v4.0.1
 	github.com/ory/cli v0.0.28
-	github.com/ory/fosite v0.34.1
+	github.com/ory/fosite v0.36.0
 	github.com/ory/go-acc v0.2.5
 	github.com/ory/graceful v0.1.1
 	github.com/ory/herodot v0.9.1
 	github.com/ory/viper v1.7.5
-	github.com/ory/x v0.0.161
+	github.com/ory/x v0.0.163
 	github.com/pborman/uuid v1.2.0
 	github.com/phayes/freeport v0.0.0-20171002181615-b8543db493a5
 	github.com/pkg/errors v0.9.1

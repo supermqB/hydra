@@ -57,7 +57,7 @@ func resetConfig() {
 	viper.Set(configuration.ViperKeyGetSystemSecret, []string{"000000000000000000000000000000000000000000000000"})
 	viper.Set(configuration.ViperKeyGetCookieSecrets, []string{"000000000000000000000000000000000000000000000000"})
 
-	viper.Set(configuration.ViperKeyLogLevel, "debug")
+	viper.Set(configuration.ViperKeyLogLevel, "trace")
 }
 
 func NewConfigurationWithDefaults() *configuration.ViperProvider {
@@ -72,6 +72,10 @@ func NewConfigurationWithDefaultsAndHTTPS() *configuration.ViperProvider {
 
 func NewRegistryMemory(t *testing.T, c *configuration.ViperProvider) driver.Registry {
 	return newRegistryDefault(t, "memory", c)
+}
+
+func NewMockedRegistry(t *testing.T) driver.Registry {
+	return newRegistryDefault(t, "memory", NewConfigurationWithDefaults())
 }
 
 func NewRegistrySQLFromURL(t *testing.T, url string) driver.Registry {

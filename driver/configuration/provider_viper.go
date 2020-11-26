@@ -37,6 +37,9 @@ type ViperProvider struct {
 const (
 	ViperKeyWellKnownKeys                 = "webfinger.jwks.broadcast_keys"
 	ViperKeyOAuth2ClientRegistrationURL   = "webfinger.oidc_discovery.client_registration_url"
+	ViperKLeyOAuth2TokenURL               = "webfinger.oidc_discovery.token_url" // #nosec G101
+	ViperKLeyOAuth2AuthURL                = "webfinger.oidc_discovery.auth_url"
+	ViperKeyJWKSURL                       = "webfinger.oidc_discovery.jwks_url"
 	ViperKeyOIDCDiscoverySupportedClaims  = "webfinger.oidc_discovery.supported_claims"
 	ViperKeyOIDCDiscoverySupportedScope   = "webfinger.oidc_discovery.supported_scope"
 	ViperKeyOIDCDiscoveryUserinfoEndpoint = "webfinger.oidc_discovery.userinfo_url"
@@ -83,6 +86,8 @@ const (
 	ViperKeyLogLevel                                  = "log.level"
 	ViperKeyCGroupsV1AutoMaxProcsEnabled              = "cgroups.v1.auto_max_procs_enabled"
 	ViperKeyGrantAllClientCredentialsScopesPerDefault = "oauth2.client_credentials.default_grant_allowed_scope"
+	ViperKeyExposeOAuth2Debug                         = "oauth2.expose_internal_errors"
+	ViperKeyOAuth2LegacyErrors                        = "oauth2.include_legacy_error_fields"
 )
 
 const DefaultSQLiteMemoryDSN = "sqlite://:memory:?_fk=true"
@@ -446,12 +451,20 @@ func (v *ViperProvider) IssuerURL() *url.URL {
 	return urlRoot(urlx.ParseOrFatal(v.l, strings.TrimRight(viperx.GetString(v.l, ViperKeyIssuerURL, v.fallbackURL("/", v.publicHost(), v.publicPort()), "OAUTH2_ISSUER_URL", "ISSUER", "ISSUER_URL"), "/")+"/"))
 }
 
-func (v *ViperProvider) OAuth2AuthURL() string {
-	return "/oauth2/auth" // this should not have the host etc prepended...
-}
-
 func (v *ViperProvider) OAuth2ClientRegistrationURL() *url.URL {
 	return urlx.ParseOrFatal(v.l, viperx.GetString(v.l, ViperKeyOAuth2ClientRegistrationURL, "", "OAUTH2_CLIENT_REGISTRATION_URL"))
+}
+
+func (v *ViperProvider) OAuth2TokenURL() *url.URL {
+	return urlx.ParseOrFatal(v.l, viperx.GetString(v.l, ViperKLeyOAuth2TokenURL, urlx.AppendPaths(v.IssuerURL(), "/oauth2/token").String()))
+}
+
+func (v *ViperProvider) OAuth2AuthURL() *url.URL {
+	return urlx.ParseOrFatal(v.l, viperx.GetString(v.l, ViperKLeyOAuth2AuthURL, urlx.AppendPaths(v.IssuerURL(), "/oauth2/auth").String()))
+}
+
+func (v *ViperProvider) JWKSURL() *url.URL {
+	return urlx.ParseOrFatal(v.l, viperx.GetString(v.l, ViperKeyJWKSURL, urlx.AppendPaths(v.IssuerURL(), "/.well-known/jwks.json").String()))
 }
 
 func (v *ViperProvider) AllowTLSTerminationFrom() []string {
@@ -489,7 +502,11 @@ func (v *ViperProvider) OIDCDiscoveryUserinfoEndpoint() string {
 }
 
 func (v *ViperProvider) ShareOAuth2Debug() bool {
-	return viperx.GetBool(v.l, "oauth2.expose_internal_errors", false, "OAUTH2_SHARE_ERROR_DEBUG")
+	return viperx.GetBool(v.l, ViperKeyExposeOAuth2Debug, false, "OAUTH2_SHARE_ERROR_DEBUG")
+}
+
+func (v *ViperProvider) OAuth2LegacyErrors() bool {
+	return viperx.GetBool(v.l, ViperKeyOAuth2LegacyErrors, false)
 }
 
 func (v *ViperProvider) PKCEEnforced() bool {

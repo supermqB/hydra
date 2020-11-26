@@ -429,7 +429,32 @@
           "additionalProperties": false,
           "description": "Configures OpenID Connect Discovery (/.well-known/openid-configuration).",
           "properties": {
+            "jwks_url": {
+              "type": "string",
+              "description": "Overwrites the JWKS URL",
+              "format": "uri",
+              "examples": [
+                "https://my-service.com/.well-known/jwks.json"
+              ]
+            },
+            "token_url": {
+              "type": "string",
+              "description": "Overwrites the OAuth2 Token URL",
+              "format": "uri",
+              "examples": [
+                "https://my-service.com/oauth2/token"
+              ]
+            },
+            "auth_url": {
+              "type": "string",
+              "description": "Overwrites the OAuth2 Auth URL",
+              "format": "uri",
+              "examples": [
+                "https://my-service.com/oauth2/auth"
+              ]
+            },
             "client_registration_url": {
+              "description": "Sets the OpenID Connect Dynamic Client Registration Endpoint",
               "type": "string",
               "format": "uri",
               "examples": [
@@ -729,6 +754,25 @@
             true
           ]
         },
+        "session": {
+          "type": "object",
+          "properties": {
+            "encrypt_at_rest": {
+              "type": "boolean",
+              "default": true,
+              "title": "Encrypt OAuth2 Session",
+              "description": "If set to true (default) ORY Hydra encrypt OAuth2 and OpenID Connect session data using AES-GCM and the system secret before persisting it in the database."
+            }
+          }
+        },
+        "include_legacy_error_fields": {
+          "type": "boolean",
+          "description": "Set this to true if you want to include the `error_hint` and `error_debug` legacy fields in error responses. We recommend to set this to `false` unless you have clients using these fields.",
+          "default": false,
+          "examples": [
+            true
+          ]
+        },
         "hashers": {
           "type": "object",
           "additionalProperties": false,
@@ -743,7 +787,7 @@
                   "type": "integer",
                   "description": "Sets the BCrypt cost. The higher the value, the more CPU time is being used to generate hashes.",
                   "default": 10,
-                  "minimum": 8,
+                  "minimum": 4,
                   "maximum": 31
                 }
               }

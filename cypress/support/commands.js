@@ -23,7 +23,7 @@
 //
 // -- This is will overwrite an existing command --
 // Cypress.Commands.overwrite("visit", (originalFn, url, options) => { ... })
-import { createClient } from '../helpers';
+import { createClient } from '../helpers'
 
 Cypress.Commands.add(
   'authCodeFlow',
@@ -50,48 +50,47 @@ Cypress.Commands.add(
     path = 'oauth2'
   ) => {
     if (doCreateClient) {
-      cy.wrap(createClient(client));
+      cy.wrap(createClient(client))
     }
 
     cy.visit(
-      `${Cypress.env('client_url')}/${path}/code?client_id=${client_id ||
-        client.client_id}&client_secret=${client_secret ||
-        client.client_secret}&scope=${(scope || client.scope).replace(
-        ' ',
-        '+'
-      )}&prompt=${prompt}`,
+      `${Cypress.env('client_url')}/${path}/code?client_id=${
+        client_id || client.client_id
+      }&client_secret=${client_secret || client.client_secret}&scope=${(
+        scope || client.scope
+      ).replace(' ', '+')}&prompt=${prompt}`,
       { failOnStatusCode: false }
-    );
+    )
 
     if (!skipLogin) {
-      cy.get('#email').type(username, { delay: 1 });
-      cy.get('#password').type(password, { delay: 1 });
+      cy.get('#email').type(username, { delay: 1 })
+      cy.get('#password').type(password, { delay: 1 })
 
       if (rememberLogin) {
-        cy.get('#remember').click();
+        cy.get('#remember').click()
       }
 
       if (acceptLogin) {
-        cy.get('#accept').click();
+        cy.get('#accept').click()
       } else {
-        cy.get('#reject').click();
+        cy.get('#reject').click()
       }
     }
 
     if (!skipConsent) {
-      acceptScope.forEach(s => {
-        cy.get(`#${s}`).click();
-      });
+      acceptScope.forEach((s) => {
+        cy.get(`#${s}`).click()
+      })
 
       if (rememberConsent) {
-        cy.get('#remember').click();
+        cy.get('#remember').click()
       }
 
       if (acceptConsent) {
-        cy.get('#accept').click();
+        cy.get('#accept').click()
       } else {
-        cy.get('#reject').click();
+        cy.get('#reject').click()
       }
     }
   }
-);
+)

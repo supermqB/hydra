@@ -212,6 +212,9 @@ func TestViperProviderValidates(t *testing.T) {
 	// webfinger
 	assert.Equal(t, []string{"hydra.openid.id-token"}, c.WellKnownKeys())
 	assert.Equal(t, urlx.ParseOrPanic("https://example.com"), c.OAuth2ClientRegistrationURL())
+	assert.Equal(t, urlx.ParseOrPanic("https://example.com/jwks.json"), c.JWKSURL())
+	assert.Equal(t, urlx.ParseOrPanic("https://example.com/auth"), c.OAuth2AuthURL())
+	assert.Equal(t, urlx.ParseOrPanic("https://example.com/token"), c.OAuth2TokenURL())
 	assert.Equal(t, []string{"sub", "username"}, c.OIDCDiscoverySupportedClaims())
 	assert.Equal(t, []string{"offline_access", "offline", "openid", "whatever"}, c.OIDCDiscoverySupportedScope())
 	assert.Equal(t, "https://example.com", c.OIDCDiscoveryUserinfoEndpoint())
@@ -244,6 +247,7 @@ func TestViperProviderValidates(t *testing.T) {
 
 	// oauth2
 	assert.Equal(t, true, c.ShareOAuth2Debug())
+	assert.Equal(t, true, c.OAuth2LegacyErrors())
 	assert.Equal(t, 20, c.BCryptCost())
 	assert.Equal(t, true, c.PKCEEnforced())
 	assert.Equal(t, true, c.EnforcePKCEForPublicClients())

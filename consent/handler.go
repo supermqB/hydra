@@ -26,6 +26,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/ory/x/errorsx"
+
 	"github.com/ory/x/sqlxx"
 	"github.com/ory/x/stringsx"
 
@@ -105,7 +107,7 @@ func (h *Handler) DeleteConsentSession(w http.ResponseWriter, r *http.Request, p
 	client := r.URL.Query().Get("client")
 	allClients := r.URL.Query().Get("all") == "true"
 	if subject == "" {
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter "subject" is not defined but should have been.`)))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter 'subject' is not defined but should have been.`)))
 		return
 	}
 
@@ -121,7 +123,7 @@ func (h *Handler) DeleteConsentSession(w http.ResponseWriter, r *http.Request, p
 			return
 		}
 	default:
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter both "client" and "all" is not defined but one of them should have been.`)))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter both 'client' and 'all' is not defined but one of them should have been.`)))
 		return
 	}
 
@@ -155,7 +157,7 @@ func (h *Handler) DeleteConsentSession(w http.ResponseWriter, r *http.Request, p
 func (h *Handler) GetConsentSessions(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	subject := r.URL.Query().Get("subject")
 	if subject == "" {
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter "subject" is not defined but should have been.`)))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter 'subject' is not defined but should have been.`)))
 		return
 	}
 
@@ -216,7 +218,7 @@ func (h *Handler) GetConsentSessions(w http.ResponseWriter, r *http.Request, ps 
 func (h *Handler) DeleteLoginSession(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	subject := r.URL.Query().Get("subject")
 	if subject == "" {
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter "subject" is not defined but should have been.`)))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter 'subject' is not defined but should have been.`)))
 		return
 	}
 
@@ -262,7 +264,7 @@ func (h *Handler) GetLoginRequest(w http.ResponseWriter, r *http.Request, ps htt
 	)
 
 	if challenge == "" {
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter "challenge" is not defined but should have been.`)))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter 'challenge' is not defined but should have been.`)))
 		return
 	}
 
@@ -309,6 +311,7 @@ func (h *Handler) GetLoginRequest(w http.ResponseWriter, r *http.Request, ps htt
 //
 //     Responses:
 //       200: completedRequest
+//       400: genericError
 //       404: genericError
 //       401: genericError
 //       500: genericError
@@ -318,7 +321,7 @@ func (h *Handler) AcceptLoginRequest(w http.ResponseWriter, r *http.Request, ps 
 		r.URL.Query().Get("challenge"),
 	)
 	if challenge == "" {
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter "challenge" is not defined but should have been.`)))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter 'challenge' is not defined but should have been.`)))
 		return
 	}
 
@@ -326,12 +329,12 @@ func (h *Handler) AcceptLoginRequest(w http.ResponseWriter, r *http.Request, ps 
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&p); err != nil {
-		h.r.Writer().WriteErrorCode(w, r, http.StatusBadRequest, errors.WithStack(err))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithWrap(err).WithHintf("Unable to decode body because: %s", err)))
 		return
 	}
 
 	if p.Subject == "" {
-		h.r.Writer().WriteErrorCode(w, r, http.StatusBadRequest, errors.New("Subject from payload can not be empty"))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint("Field 'subject' must not be empty.")))
 		return
 	}
 
@@ -341,7 +344,7 @@ func (h *Handler) AcceptLoginRequest(w http.ResponseWriter, r *http.Request, ps 
 		h.r.Writer().WriteError(w, r, err)
 		return
 	} else if ar.Subject != "" && p.Subject != ar.Subject {
-		h.r.Writer().WriteErrorCode(w, r, http.StatusBadRequest, errors.New("Subject from payload does not match subject from previous authentication"))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint("Field 'subject' does not match subject from previous authentication.")))
 		return
 	}
 
@@ -349,13 +352,16 @@ func (h *Handler) AcceptLoginRequest(w http.ResponseWriter, r *http.Request, ps 
 		p.Remember = true // If skip is true remember is also true to allow consecutive calls as the same user!
 		p.AuthenticatedAt = ar.AuthenticatedAt
 	} else {
-		p.AuthenticatedAt = sqlxx.NullTime(time.Now().UTC())
+		p.AuthenticatedAt = sqlxx.NullTime(time.Now().UTC().
+			// Rounding is important to avoid SQL time synchronization issues in e.g. MySQL!
+			Truncate(time.Second))
+		ar.AuthenticatedAt = p.AuthenticatedAt
 	}
 	p.RequestedAt = ar.RequestedAt
 
 	request, err := h.r.ConsentManager().HandleLoginRequest(r.Context(), challenge, &p)
 	if err != nil {
-		h.r.Writer().WriteError(w, r, errors.WithStack(err))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(err))
 		return
 	}
 
@@ -397,6 +403,7 @@ func (h *Handler) AcceptLoginRequest(w http.ResponseWriter, r *http.Request, ps 
 //
 //     Responses:
 //       200: completedRequest
+//       400: genericError
 //       401: genericError
 //       404: genericError
 //       500: genericError
@@ -406,7 +413,7 @@ func (h *Handler) RejectLoginRequest(w http.ResponseWriter, r *http.Request, ps 
 		r.URL.Query().Get("challenge"),
 	)
 	if challenge == "" {
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter "challenge" is not defined but should have been.`)))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter 'challenge' is not defined but should have been.`)))
 		return
 	}
 
@@ -414,7 +421,7 @@ func (h *Handler) RejectLoginRequest(w http.ResponseWriter, r *http.Request, ps 
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&p); err != nil {
-		h.r.Writer().WriteErrorCode(w, r, http.StatusBadRequest, errors.WithStack(err))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithWrap(err).WithHintf("Unable to decode body because: %s", err)))
 		return
 	}
 
@@ -432,7 +439,7 @@ func (h *Handler) RejectLoginRequest(w http.ResponseWriter, r *http.Request, ps 
 		RequestedAt: ar.RequestedAt,
 	})
 	if err != nil {
-		h.r.Writer().WriteError(w, r, errors.WithStack(err))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(err))
 		return
 	}
 
@@ -481,7 +488,7 @@ func (h *Handler) GetConsentRequest(w http.ResponseWriter, r *http.Request, ps h
 		r.URL.Query().Get("challenge"),
 	)
 	if challenge == "" {
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter "challenge" is not defined but should have been.`)))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter 'challenge' is not defined but should have been.`)))
 		return
 	}
 
@@ -546,7 +553,7 @@ func (h *Handler) AcceptConsentRequest(w http.ResponseWriter, r *http.Request, p
 		r.URL.Query().Get("challenge"),
 	)
 	if challenge == "" {
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter "challenge" is not defined but should have been.`)))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter 'challenge' is not defined but should have been.`)))
 		return
 	}
 
@@ -554,13 +561,13 @@ func (h *Handler) AcceptConsentRequest(w http.ResponseWriter, r *http.Request, p
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&p); err != nil {
-		h.r.Writer().WriteErrorCode(w, r, http.StatusBadRequest, errors.WithStack(err))
+		h.r.Writer().WriteErrorCode(w, r, http.StatusBadRequest, errorsx.WithStack(err))
 		return
 	}
 
 	cr, err := h.r.ConsentManager().GetConsentRequest(r.Context(), challenge)
 	if err != nil {
-		h.r.Writer().WriteError(w, r, errors.WithStack(err))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(err))
 		return
 	}
 
@@ -570,7 +577,7 @@ func (h *Handler) AcceptConsentRequest(w http.ResponseWriter, r *http.Request, p
 
 	hr, err := h.r.ConsentManager().HandleConsentRequest(r.Context(), challenge, &p)
 	if err != nil {
-		h.r.Writer().WriteError(w, r, errors.WithStack(err))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(err))
 		return
 	} else if hr.Skip {
 		p.Remember = false
@@ -625,7 +632,7 @@ func (h *Handler) RejectConsentRequest(w http.ResponseWriter, r *http.Request, p
 		r.URL.Query().Get("challenge"),
 	)
 	if challenge == "" {
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter "challenge" is not defined but should have been.`)))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter 'challenge' is not defined but should have been.`)))
 		return
 	}
 
@@ -633,7 +640,7 @@ func (h *Handler) RejectConsentRequest(w http.ResponseWriter, r *http.Request, p
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&p); err != nil {
-		h.r.Writer().WriteErrorCode(w, r, http.StatusBadRequest, errors.WithStack(err))
+		h.r.Writer().WriteErrorCode(w, r, http.StatusBadRequest, errorsx.WithStack(err))
 		return
 	}
 
@@ -641,7 +648,7 @@ func (h *Handler) RejectConsentRequest(w http.ResponseWriter, r *http.Request, p
 	p.SetDefaults(consentRequestDeniedErrorName)
 	hr, err := h.r.ConsentManager().GetConsentRequest(r.Context(), challenge)
 	if err != nil {
-		h.r.Writer().WriteError(w, r, errors.WithStack(err))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(err))
 		return
 	}
 
@@ -652,7 +659,7 @@ func (h *Handler) RejectConsentRequest(w http.ResponseWriter, r *http.Request, p
 		HandledAt:   sqlxx.NullTime(time.Now().UTC()),
 	})
 	if err != nil {
-		h.r.Writer().WriteError(w, r, errors.WithStack(err))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(err))
 		return
 	}
 

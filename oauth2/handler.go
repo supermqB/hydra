@@ -25,10 +25,13 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"net/url"
 	"reflect"
 	"strings"
 	"time"
+
+	"github.com/pborman/uuid"
+
+	"github.com/ory/x/errorsx"
 
 	jwt2 "github.com/dgrijalva/jwt-go"
 	"github.com/julienschmidt/httprouter"
@@ -84,9 +87,9 @@ func (h *Handler) SetRoutes(admin *x.RouterAdmin, public *x.RouterPublic, corsMi
 	public.GET(LogoutPath, h.LogoutHandler)
 	public.POST(LogoutPath, h.LogoutHandler)
 
-	public.GET(DefaultLoginPath, h.fallbackHandler("", "", http.StatusInternalServerError, configuration.ViperKeyLoginURL))
-	public.GET(DefaultConsentPath, h.fallbackHandler("", "", http.StatusInternalServerError, configuration.ViperKeyConsentURL))
-	public.GET(DefaultLogoutPath, h.fallbackHandler("", "", http.StatusInternalServerError, configuration.ViperKeyLogoutURL))
+	public.GET(DefaultLoginPath, h.fallbackHandler("", "", http.StatusOK, configuration.ViperKeyLoginURL))
+	public.GET(DefaultConsentPath, h.fallbackHandler("", "", http.StatusOK, configuration.ViperKeyConsentURL))
+	public.GET(DefaultLogoutPath, h.fallbackHandler("", "", http.StatusOK, configuration.ViperKeyLogoutURL))
 	public.GET(DefaultPostLogoutPath, h.fallbackHandler(
 		"You logged out successfully!",
 		"The Default Post Logout URL is not set which is why you are seeing this fallback page. Your log out request however succeeded.",
@@ -223,30 +226,31 @@ func (h *Handler) LogoutHandler(w http.ResponseWriter, r *http.Request, ps httpr
 //       500: genericError
 func (h *Handler) WellKnownHandler(w http.ResponseWriter, r *http.Request) {
 	h.r.Writer().Write(w, r, &WellKnown{
-		Issuer:                             strings.TrimRight(h.c.IssuerURL().String(), "/") + "/",
-		AuthURL:                            urlx.AppendPaths(h.c.IssuerURL(), AuthPath).String(),
-		TokenURL:                           urlx.AppendPaths(h.c.IssuerURL(), TokenPath).String(),
-		JWKsURI:                            urlx.AppendPaths(h.c.IssuerURL(), JWKPath).String(),
-		RevocationEndpoint:                 urlx.AppendPaths(h.c.IssuerURL(), RevocationPath).String(),
-		RegistrationEndpoint:               h.c.OAuth2ClientRegistrationURL().String(),
-		SubjectTypes:                       h.c.SubjectTypesSupported(),
-		ResponseTypes:                      []string{"code", "code id_token", "id_token", "token id_token", "token", "token id_token code"},
-		ClaimsSupported:                    h.c.OIDCDiscoverySupportedClaims(),
-		ScopesSupported:                    h.c.OIDCDiscoverySupportedScope(),
-		UserinfoEndpoint:                   h.c.OIDCDiscoveryUserinfoEndpoint(),
-		TokenEndpointAuthMethodsSupported:  []string{"client_secret_post", "client_secret_basic", "private_key_jwt", "none"},
-		IDTokenSigningAlgValuesSupported:   []string{"RS256"},
-		GrantTypesSupported:                []string{"authorization_code", "implicit", "client_credentials", "refresh_token"},
-		ResponseModesSupported:             []string{"query", "fragment"},
-		UserinfoSigningAlgValuesSupported:  []string{"none", "RS256"},
-		RequestParameterSupported:          true,
-		RequestURIParameterSupported:       true,
-		RequireRequestURIRegistration:      true,
-		BackChannelLogoutSupported:         true,
-		BackChannelLogoutSessionSupported:  true,
-		FrontChannelLogoutSupported:        true,
-		FrontChannelLogoutSessionSupported: true,
-		EndSessionEndpoint:                 urlx.AppendPaths(h.c.IssuerURL(), LogoutPath).String(),
+		Issuer:                                 strings.TrimRight(h.c.IssuerURL().String(), "/") + "/",
+		AuthURL:                                h.c.OAuth2AuthURL().String(),
+		TokenURL:                               h.c.OAuth2TokenURL().String(),
+		JWKsURI:                                h.c.JWKSURL().String(),
+		RevocationEndpoint:                     urlx.AppendPaths(h.c.IssuerURL(), RevocationPath).String(),
+		RegistrationEndpoint:                   h.c.OAuth2ClientRegistrationURL().String(),
+		SubjectTypes:                           h.c.SubjectTypesSupported(),
+		ResponseTypes:                          []string{"code", "code id_token", "id_token", "token id_token", "token", "token id_token code"},
+		ClaimsSupported:                        h.c.OIDCDiscoverySupportedClaims(),
+		ScopesSupported:                        h.c.OIDCDiscoverySupportedScope(),
+		UserinfoEndpoint:                       h.c.OIDCDiscoveryUserinfoEndpoint(),
+		TokenEndpointAuthMethodsSupported:      []string{"client_secret_post", "client_secret_basic", "private_key_jwt", "none"},
+		IDTokenSigningAlgValuesSupported:       []string{"RS256"},
+		GrantTypesSupported:                    []string{"authorization_code", "implicit", "client_credentials", "refresh_token"},
+		ResponseModesSupported:                 []string{"query", "fragment"},
+		UserinfoSigningAlgValuesSupported:      []string{"none", "RS256"},
+		RequestParameterSupported:              true,
+		RequestURIParameterSupported:           true,
+		RequireRequestURIRegistration:          true,
+		BackChannelLogoutSupported:             true,
+		BackChannelLogoutSessionSupported:      true,
+		FrontChannelLogoutSupported:            true,
+		FrontChannelLogoutSessionSupported:     true,
+		EndSessionEndpoint:                     urlx.AppendPaths(h.c.IssuerURL(), LogoutPath).String(),
+		RequestObjectSigningAlgValuesSupported: []string{"RS256", "none"},
 	})
 }
 
@@ -277,7 +281,7 @@ func (h *Handler) UserinfoHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		rfcerr := fosite.ErrorToRFC6749Error(err)
 		if rfcerr.StatusCode() == http.StatusUnauthorized {
-			w.Header().Set("WWW-Authenticate", fmt.Sprintf("error=%s,error_description=%s,error_hint=%s", rfcerr.Name, rfcerr.Description, rfcerr.Hint))
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf("error=%s,error_description=%s,error_hint=%s", rfcerr.ErrorField, rfcerr.DescriptionField, rfcerr.HintField))
 		}
 		h.r.Writer().WriteError(w, r, err)
 		return
@@ -292,21 +296,25 @@ func (h *Handler) UserinfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	c, ok := ar.GetClient().(*client.Client)
 	if !ok {
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrServerError.WithHint("Unable to type assert to *client.Client")))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrServerError.WithHint("Unable to type assert to *client.Client.")))
 		return
 	}
 
-	if c.UserinfoSignedResponseAlg == "RS256" {
-		interim := ar.GetSession().(*Session).IDTokenClaims().ToMap()
+	interim := ar.GetSession().(*Session).IDTokenClaims().ToMap()
+	delete(interim, "nonce")
+	delete(interim, "at_hash")
+	delete(interim, "c_hash")
+	delete(interim, "exp")
+	delete(interim, "sid")
+	delete(interim, "jti")
 
-		delete(interim, "nonce")
-		delete(interim, "at_hash")
-		delete(interim, "c_hash")
-		delete(interim, "auth_time")
-		delete(interim, "iat")
-		delete(interim, "rat")
-		delete(interim, "exp")
-		delete(interim, "jti")
+	if aud := interim["aud"].([]string); !ok || len(aud) == 0 {
+		interim["aud"] = []string{c.GetID()}
+	}
+
+	if c.UserinfoSignedResponseAlg == "RS256" {
+		interim["jti"] = uuid.New()
+		interim["iat"] = time.Now().Unix()
 
 		keyID, err := h.r.OpenIDJWTStrategy().GetPublicKeyID(r.Context())
 		if err != nil {
@@ -315,9 +323,7 @@ func (h *Handler) UserinfoHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		token, _, err := h.r.OpenIDJWTStrategy().Generate(r.Context(), jwt2.MapClaims(interim), &jwt.Headers{
-			Extra: map[string]interface{}{
-				"kid": keyID,
-			},
+			Extra: map[string]interface{}{"kid": keyID},
 		})
 		if err != nil {
 			h.r.Writer().WriteError(w, r, err)
@@ -327,21 +333,9 @@ func (h *Handler) UserinfoHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/jwt")
 		_, _ = w.Write([]byte(token))
 	} else if c.UserinfoSignedResponseAlg == "" || c.UserinfoSignedResponseAlg == "none" {
-		interim := ar.GetSession().(*Session).IDTokenClaims().ToMap()
-		delete(interim, "aud")
-		delete(interim, "iss")
-		delete(interim, "nonce")
-		delete(interim, "at_hash")
-		delete(interim, "c_hash")
-		delete(interim, "auth_time")
-		delete(interim, "iat")
-		delete(interim, "rat")
-		delete(interim, "exp")
-		delete(interim, "jti")
-
 		h.r.Writer().Write(w, r, interim)
 	} else {
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrServerError.WithHint(fmt.Sprintf("Unsupported userinfo signing algorithm \"%s\"", c.UserinfoSignedResponseAlg))))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrServerError.WithHintf("Unsupported userinfo signing algorithm '%s'.", c.UserinfoSignedResponseAlg)))
 		return
 	}
 }
@@ -406,17 +400,17 @@ func (h *Handler) IntrospectHandler(w http.ResponseWriter, r *http.Request, _ ht
 	var ctx = r.Context()
 
 	if r.Method != "POST" {
-		err := errors.WithStack(fosite.ErrInvalidRequest.WithHintf("HTTP method is \"%s\", expected \"POST\".", r.Method))
+		err := errorsx.WithStack(fosite.ErrInvalidRequest.WithHintf("HTTP method is \"%s\", expected \"POST\".", r.Method))
 		x.LogError(r, err, h.r.Logger())
 		h.r.OAuth2Provider().WriteIntrospectionError(w, err)
 		return
 	} else if err := r.ParseMultipartForm(1 << 20); err != nil && err != http.ErrNotMultipart {
-		err := errors.WithStack(fosite.ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithDebug(err.Error()))
+		err := errorsx.WithStack(fosite.ErrInvalidRequest.WithHint("Unable to parse HTTP body, make sure to send a properly formatted form request body.").WithDebug(err.Error()))
 		x.LogError(r, err, h.r.Logger())
 		h.r.OAuth2Provider().WriteIntrospectionError(w, err)
 		return
 	} else if len(r.PostForm) == 0 {
-		err := errors.WithStack(fosite.ErrInvalidRequest.WithHint("The POST body can not be empty."))
+		err := errorsx.WithStack(fosite.ErrInvalidRequest.WithHint("The POST body can not be empty."))
 		x.LogError(r, err, h.r.Logger())
 		h.r.OAuth2Provider().WriteIntrospectionError(w, err)
 		return
@@ -429,7 +423,7 @@ func (h *Handler) IntrospectHandler(w http.ResponseWriter, r *http.Request, _ ht
 	tt, ar, err := h.r.OAuth2Provider().IntrospectToken(ctx, token, fosite.TokenType(tokenType), session, strings.Split(scope, " ")...)
 	if err != nil {
 		x.LogAudit(r, err, h.r.Logger())
-		err := errors.WithStack(fosite.ErrInactiveToken.WithHint("An introspection strategy indicated that the token is inactive.").WithDebug(err.Error()))
+		err := errorsx.WithStack(fosite.ErrInactiveToken.WithHint("An introspection strategy indicated that the token is inactive.").WithDebug(err.Error()))
 		h.r.OAuth2Provider().WriteIntrospectionError(w, err)
 		return
 	}
@@ -437,7 +431,8 @@ func (h *Handler) IntrospectHandler(w http.ResponseWriter, r *http.Request, _ ht
 	resp := &fosite.IntrospectionResponse{
 		Active:          true,
 		AccessRequester: ar,
-		TokenType:       tt,
+		TokenUse:        tt,
+		AccessTokenType: "Bearer",
 	}
 
 	exp := resp.GetAccessRequester().GetSession().GetExpiresAt(tt)
@@ -451,7 +446,7 @@ func (h *Handler) IntrospectHandler(w http.ResponseWriter, r *http.Request, _ ht
 
 	session, ok := resp.GetAccessRequester().GetSession().(*Session)
 	if !ok {
-		err := errors.WithStack(fosite.ErrServerError.WithHint("Expected session to be of type *Session, but got another type.").WithDebug(fmt.Sprintf("Got type %s", reflect.TypeOf(resp.GetAccessRequester().GetSession()))))
+		err := errorsx.WithStack(fosite.ErrServerError.WithHint("Expected session to be of type *Session, but got another type.").WithDebug(fmt.Sprintf("Got type %s", reflect.TypeOf(resp.GetAccessRequester().GetSession()))))
 		x.LogError(r, err, h.r.Logger())
 		h.r.OAuth2Provider().WriteIntrospectionError(w, err)
 		return
@@ -460,6 +455,12 @@ func (h *Handler) IntrospectHandler(w http.ResponseWriter, r *http.Request, _ ht
 	var obfuscated string
 	if len(session.Claims.Subject) > 0 && session.Claims.Subject != session.Subject {
 		obfuscated = session.Claims.Subject
+	}
+
+	audience := resp.GetAccessRequester().GetGrantedAudience()
+	if audience == nil {
+		// prevent null
+		audience = fosite.Arguments{}
 	}
 
 	w.Header().Set("Content-Type", "application/json;charset=UTF-8")
@@ -472,12 +473,14 @@ func (h *Handler) IntrospectHandler(w http.ResponseWriter, r *http.Request, _ ht
 		Subject:           session.GetSubject(),
 		Username:          session.GetUsername(),
 		Extra:             session.Extra,
-		Audience:          resp.GetAccessRequester().GetGrantedAudience(),
+		Audience:          audience,
 		Issuer:            strings.TrimRight(h.c.IssuerURL().String(), "/") + "/",
 		ObfuscatedSubject: obfuscated,
-		TokenType:         string(resp.GetTokenType()),
+		TokenType:         resp.GetAccessTokenType(),
+		TokenUse:          string(resp.GetTokenUse()),
+		NotBefore:         resp.GetAccessRequester().GetRequestedAt().Unix(),
 	}); err != nil {
-		x.LogError(r, errors.WithStack(err), h.r.Logger())
+		x.LogError(r, errorsx.WithStack(err), h.r.Logger())
 	}
 }
 
@@ -686,18 +689,19 @@ func (h *Handler) AuthHandler(w http.ResponseWriter, r *http.Request, _ httprout
 	}
 
 	authorizeRequest.SetID(session.ID)
-
 	claims := &jwt.IDTokenClaims{
-		Subject:                             session.ConsentRequest.SubjectIdentifier,
-		Issuer:                              strings.TrimRight(h.c.IssuerURL().String(), "/") + "/",
-		IssuedAt:                            time.Now().UTC(),
+		Subject: session.ConsentRequest.SubjectIdentifier,
+		Issuer:  strings.TrimRight(h.c.IssuerURL().String(), "/") + "/",
+
 		AuthTime:                            time.Time(session.AuthenticatedAt),
 		RequestedAt:                         session.RequestedAt,
 		Extra:                               session.Session.IDToken,
 		AuthenticationContextClassReference: session.ConsentRequest.ACR,
 
-		// We do not need to pass the audience because it's included directly by ORY Fosite
-		// Audience:    []string{authorizeRequest.GetClient().GetID()},
+		// These are required for work around https://github.com/ory/fosite/issues/530
+		Nonce:    authorizeRequest.GetRequestForm().Get("nonce"),
+		Audience: []string{authorizeRequest.GetClient().GetID()},
+		IssuedAt: time.Now().Truncate(time.Second).UTC(),
 
 		// This is set by the fosite strategy
 		// ExpiresAt:   time.Now().Add(h.IDTokenLifespan).UTC(),
@@ -738,13 +742,8 @@ func (h *Handler) writeAuthorizeError(w http.ResponseWriter, r *http.Request, ar
 }
 
 func (h *Handler) forwardError(w http.ResponseWriter, r *http.Request, err error) {
-	rfErr := fosite.ErrorToRFC6749Error(err)
-	query := url.Values{"error": {rfErr.Name}, "error_description": {rfErr.Description}, "error_hint": {rfErr.Hint}}
-
-	if h.c.ShareOAuth2Debug() {
-		query.Add("error_debug", rfErr.Debug)
-	}
-
+	rfcErr := fosite.ErrorToRFC6749Error(err).WithLegacyFormat(h.c.OAuth2LegacyErrors()).WithExposeDebug(h.c.ShareOAuth2Debug())
+	query := rfcErr.ToValues()
 	http.Redirect(w, r, urlx.CopyWithQuery(h.c.ErrorURL(), query).String(), http.StatusFound)
 }
 
@@ -767,7 +766,7 @@ func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request, _ httpro
 	client := r.URL.Query().Get("client_id")
 
 	if client == "" {
-		h.r.Writer().WriteError(w, r, errors.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter "client" is not defined but it should have been.`)))
+		h.r.Writer().WriteError(w, r, errorsx.WithStack(fosite.ErrInvalidRequest.WithHint(`Query parameter 'client' is not defined but it should have been.`)))
 		return
 	}
 

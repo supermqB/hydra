@@ -380,6 +380,7 @@ func TestUserinfo(t *testing.T) {
 						return fosite.AccessToken, &fosite.AccessRequest{
 							Request: fosite.Request{
 								Client: &client.Client{
+									OutfacingID:               "foobar-client",
 									UserinfoSignedResponseAlg: "RS256",
 								},
 								Session: session,
@@ -398,6 +399,8 @@ func TestUserinfo(t *testing.T) {
 				})
 				require.NoError(t, err)
 				assert.EqualValues(t, "alice", claims.Claims.(jwt2.MapClaims)["sub"])
+				assert.EqualValues(t, []interface{}{"foobar-client"}, claims.Claims.(jwt2.MapClaims)["aud"], "%#v", claims.Claims)
+				assert.NotEmpty(t, claims.Claims.(jwt2.MapClaims)["jti"])
 			},
 		},
 	} {
@@ -446,30 +449,31 @@ func TestHandlerWellKnown(t *testing.T) {
 	defer res.Body.Close()
 
 	trueConfig := oauth2.WellKnown{
-		Issuer:                             strings.TrimRight(conf.IssuerURL().String(), "/") + "/",
-		AuthURL:                            urlx.AppendPaths(conf.IssuerURL(), oauth2.AuthPath).String(),
-		TokenURL:                           urlx.AppendPaths(conf.IssuerURL(), oauth2.TokenPath).String(),
-		JWKsURI:                            urlx.AppendPaths(conf.IssuerURL(), oauth2.JWKPath).String(),
-		RevocationEndpoint:                 urlx.AppendPaths(conf.IssuerURL(), oauth2.RevocationPath).String(),
-		RegistrationEndpoint:               conf.OAuth2ClientRegistrationURL().String(),
-		SubjectTypes:                       []string{"pairwise", "public"},
-		ResponseTypes:                      []string{"code", "code id_token", "id_token", "token id_token", "token", "token id_token code"},
-		ClaimsSupported:                    conf.OIDCDiscoverySupportedClaims(),
-		ScopesSupported:                    conf.OIDCDiscoverySupportedScope(),
-		UserinfoEndpoint:                   conf.OIDCDiscoveryUserinfoEndpoint(),
-		TokenEndpointAuthMethodsSupported:  []string{"client_secret_post", "client_secret_basic", "private_key_jwt", "none"},
-		GrantTypesSupported:                []string{"authorization_code", "implicit", "client_credentials", "refresh_token"},
-		ResponseModesSupported:             []string{"query", "fragment"},
-		IDTokenSigningAlgValuesSupported:   []string{"RS256"},
-		UserinfoSigningAlgValuesSupported:  []string{"none", "RS256"},
-		RequestParameterSupported:          true,
-		RequestURIParameterSupported:       true,
-		RequireRequestURIRegistration:      true,
-		BackChannelLogoutSupported:         true,
-		BackChannelLogoutSessionSupported:  true,
-		FrontChannelLogoutSupported:        true,
-		FrontChannelLogoutSessionSupported: true,
-		EndSessionEndpoint:                 urlx.AppendPaths(conf.IssuerURL(), oauth2.LogoutPath).String(),
+		Issuer:                                 strings.TrimRight(conf.IssuerURL().String(), "/") + "/",
+		AuthURL:                                conf.OAuth2AuthURL().String(),
+		TokenURL:                               conf.OAuth2TokenURL().String(),
+		JWKsURI:                                conf.JWKSURL().String(),
+		RevocationEndpoint:                     urlx.AppendPaths(conf.IssuerURL(), oauth2.RevocationPath).String(),
+		RegistrationEndpoint:                   conf.OAuth2ClientRegistrationURL().String(),
+		SubjectTypes:                           []string{"pairwise", "public"},
+		ResponseTypes:                          []string{"code", "code id_token", "id_token", "token id_token", "token", "token id_token code"},
+		ClaimsSupported:                        conf.OIDCDiscoverySupportedClaims(),
+		ScopesSupported:                        conf.OIDCDiscoverySupportedScope(),
+		UserinfoEndpoint:                       conf.OIDCDiscoveryUserinfoEndpoint(),
+		TokenEndpointAuthMethodsSupported:      []string{"client_secret_post", "client_secret_basic", "private_key_jwt", "none"},
+		GrantTypesSupported:                    []string{"authorization_code", "implicit", "client_credentials", "refresh_token"},
+		ResponseModesSupported:                 []string{"query", "fragment"},
+		IDTokenSigningAlgValuesSupported:       []string{"RS256"},
+		UserinfoSigningAlgValuesSupported:      []string{"none", "RS256"},
+		RequestParameterSupported:              true,
+		RequestURIParameterSupported:           true,
+		RequireRequestURIRegistration:          true,
+		BackChannelLogoutSupported:             true,
+		BackChannelLogoutSessionSupported:      true,
+		FrontChannelLogoutSupported:            true,
+		FrontChannelLogoutSessionSupported:     true,
+		EndSessionEndpoint:                     urlx.AppendPaths(conf.IssuerURL(), oauth2.LogoutPath).String(),
+		RequestObjectSigningAlgValuesSupported: []string{"RS256", "none"},
 	}
 	var wellKnownResp oauth2.WellKnown
 	err = json.NewDecoder(res.Body).Decode(&wellKnownResp)

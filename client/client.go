@@ -278,6 +278,15 @@ func (c *Client) GetResponseTypes() fosite.Arguments {
 	return fosite.Arguments(c.ResponseTypes)
 }
 
+func (c *Client) GetResponseModes() []fosite.ResponseModeType {
+	return []fosite.ResponseModeType{
+		fosite.ResponseModeDefault,
+		fosite.ResponseModeFormPost,
+		fosite.ResponseModeQuery,
+		fosite.ResponseModeFragment,
+	}
+}
+
 func (c *Client) GetOwner() string {
 	return c.Owner
 }
@@ -305,9 +314,6 @@ func (c *Client) GetTokenEndpointAuthSigningAlgorithm() string {
 }
 
 func (c *Client) GetRequestObjectSigningAlgorithm() string {
-	if c.RequestObjectSigningAlgorithm == "" {
-		return "RS256"
-	}
 	return c.RequestObjectSigningAlgorithm
 }
 
